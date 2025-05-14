@@ -5,8 +5,6 @@ using RayGuiCreator;
 using System.Collections.Generic;
 using System;
 
-
-
 namespace Rogue
 {
     public class Game
@@ -27,6 +25,7 @@ namespace Rogue
         public static Texture atlasImage;
         OptionsMenu myOptionsMenu;
         PauseMenu myPauseMenu;
+        public BattleScreen myBattleScreen;
         Stack<GameState> stateStack = new Stack<GameState>();
         public enum GameState
         {
@@ -34,14 +33,23 @@ namespace Rogue
             CharacterCreation,
             GameLoop,
             PauseMenu,
-            OptionsMenu
+            OptionsMenu,
+            BattleScreen
         }
 
         public GameState currentGameState;
         TextBoxEntry playerNameEntry;
         bool IsNameOk;
-        public MultipleChoiceEntry classChoices = new MultipleChoiceEntry(new string[] {Class.Rogue.ToString(), Class.Warrior.ToString(), Class.Mage.ToString()});
-        public MultipleChoiceEntry raceChoices = new MultipleChoiceEntry(new string[] { Race.Human.ToString(),Race.Elf.ToString(), Race.Orc.ToString()});
+        public MultipleChoiceEntry classChoices = new MultipleChoiceEntry(new string[] { Class.Rogue.ToString(), Class.Warrior.ToString(), Class.Mage.ToString() });
+        public MultipleChoiceEntry raceChoices = new MultipleChoiceEntry(new string[] { Race.Human.ToString(), Race.Elf.ToString(), Race.Orc.ToString() });
+
+        public Game()
+        {
+            level01 = new Map();
+            myBattleScreen = new BattleScreen();
+            level01.game = this;
+        }
+
         public void Run()
         {
             Init();
@@ -63,7 +71,7 @@ namespace Rogue
             myPauseMenu.BackButtonPressedEvent += this.OnPauseBackButtonPressed;
             myPauseMenu.OptionsButtonPressedEvent += this.OnPauseOptionsButtonPressed;
             myPauseMenu.MainMenuButtonPressedEvent += this.OnPauseMainMenuPressed;
-
+            myBattleScreen.BattleEndedEvent += this.OnBattleEnded;
 
             Raylib.InitAudioDevice();
             Raylib.InitWindow(screen_width, screen_height, "Rogue");
@@ -73,8 +81,6 @@ namespace Rogue
             EnemySound = Raylib.LoadSound("Sounds/Enemy.mp3");
             ItemSound = Raylib.LoadSound("Sounds/Item.mp3");
             WallCollide = Raylib.LoadSound("Sounds/WallCollide.mp3");
-
-
 
             MapLoader Reader = new MapLoader();
             level01 = Reader.LoadLayeredMap("Maps/mapfile.json");
@@ -95,15 +101,14 @@ namespace Rogue
             game_screen = Raylib.LoadRenderTexture(game_width, game_height);
             Raylib.SetTextureFilter(game_screen.texture, TextureFilter.TEXTURE_FILTER_POINT);
             Raylib.SetWindowMinSize(game_width, game_height);
+
+            level01.game = this;
         }
 
         private void DrawGame()
         {
             level01.DrawMap();
             player.Draw();
-
-
-
         }
 
         private void DrawGameToTexture()
@@ -142,12 +147,10 @@ namespace Rogue
                 player.Move(-1, 0);
                 level01.GetEnemyAt(player.position);
                 level01.GetItemAt(player.position);
-
             }
             if (Raylib.IsKeyPressed(KeyboardKey.KEY_TAB))
             {
                 ChangeState(GameState.PauseMenu);
-
             }
         }
 
@@ -163,7 +166,6 @@ namespace Rogue
                     case GameState.CharacterCreation:
                         DrawCharacterMenu();
                         break;
-
                     case GameState.GameLoop:
                         UpdateGame();
                         DrawGameToTexture();
@@ -174,22 +176,21 @@ namespace Rogue
                     case GameState.OptionsMenu:
                         myOptionsMenu.DrawMenu();
                         break;
+                    case GameState.BattleScreen:
+                        myBattleScreen.DrawBattleScreen(player, level01);
+                        break;
                 }
-
             }
         }
 
         private void DrawGameScaled()
         {
-
-            // Tässä piirretään tekstuuri ruudulle
             Raylib.BeginDrawing();
             Raylib.ClearBackground(Raylib.DARKGRAY);
 
             int draw_width = Raylib.GetScreenWidth();
             int draw_height = Raylib.GetScreenHeight();
             float scale = Math.Min((float)draw_width / game_width, (float)draw_height / game_height);
-
 
             Rectangle source = new Rectangle(0.0f, 0.0f,
                 game_screen.texture.width,
@@ -210,17 +211,14 @@ namespace Rogue
 
         public void DrawMainMenu()
         {
-            // Tyhjennä ruutu ja aloita piirtäminen
             Raylib.BeginDrawing();
             Raylib.ClearBackground(Raylib.BLACK);
 
-            // Laske ylimmän napin paikka ruudulla.
             int button_width = 100;
             int button_height = 20;
             int button_x = Raylib.GetScreenWidth() / 2 - button_width / 2;
             int button_y = Raylib.GetScreenHeight() / 2 - button_height / 2;
 
-            // Piirrä pelin nimi nappien yläpuolelle
             RayGui.GuiLabel(new Rectangle(button_x, button_y - button_height * 4, button_width, button_height), "Rogue");
             RayGui.GuiLabel(new Rectangle(button_x, button_y - button_height * 3, button_width, button_height), "Move: arrow keys");
             RayGui.GuiLabel(new Rectangle(button_x, button_y - button_height * 2, button_width, button_height), "Pause with TAB");
@@ -251,8 +249,6 @@ namespace Rogue
 
         public void DrawCharacterMenu()
         {
-            
-            // Tyhjennä ruutu ja aloita piirtäminen
             Raylib.BeginDrawing();
             Raylib.ClearBackground(Raylib.BLACK);
             int x = 0;
@@ -272,18 +268,18 @@ namespace Rogue
             c.ToggleGroup(classChoices);
             c.Label("");
             c.Label("");
-            if(c.LabelButton("Create Character"))
+            if (c.LabelButton("Create Character"))
             {
                 playername = playerNameEntry.ToString();
 
                 CheckIfNameOK(playername);
-                if (IsNameOk == true) 
+                if (IsNameOk == true)
                 {
                     player.name = playername;
                     switch (raceChoices.GetSelected())
                     {
                         case "Human":
-                            player.race = Race.Human; 
+                            player.race = Race.Human;
                             break;
                         case "Elf":
                             player.race = Race.Elf;
@@ -291,7 +287,6 @@ namespace Rogue
                         case "Orc":
                             player.race = Race.Orc;
                             break;
-
                     }
                     switch (classChoices.GetSelected())
                     {
@@ -304,36 +299,29 @@ namespace Rogue
                         case "Mage":
                             player.Role = Class.Mage;
                             break;
-
                     }
                     ChangeState(GameState.GameLoop);
-
                 }
-                
             }
             c.EndMenu();
-
-            
 
             Raylib.EndDrawing();
         }
 
         public string CheckIfNameOK(string name)
-        {   
-
+        {
             IsNameOk = true;
             if (Char.IsLetter(name[0]) == false)
             {
                 IsNameOk = false;
-            }   
+            }
             for (int i = 0; i < name.Length - 1; i++)
             {
                 char kirjain = name[i];
-                if (Char.IsLetter(kirjain) != true && Char.IsControl(kirjain) != true) 
+                if (Char.IsLetter(kirjain) != true && Char.IsControl(kirjain) != true)
                 {
                     IsNameOk = false;
                 }
- 
             }
 
             if (IsNameOk == false)
@@ -341,37 +329,41 @@ namespace Rogue
                 Console.WriteLine("Name can only contain letters!");
             }
             return name;
-
         }
 
         void OnOptionsBackButtonPressed(object sender, EventArgs args)
         {
             stateStack.Pop();
         }
+
         void OnPauseMainMenuPressed(object sender, EventArgs args)
         {
             ChangeState(GameState.MainMenu);
         }
+
         void OnPauseBackButtonPressed(object sender, EventArgs args)
         {
             stateStack.Pop();
         }
+
         void OnPauseOptionsButtonPressed(object sender, EventArgs args)
         {
             ChangeState(GameState.OptionsMenu);
         }
 
-        void ChangeState(GameState gameState)
+        void OnBattleEnded(object sender, EventArgs args)
+        {
+            stateStack.Pop();
+        }
+
+        public void ChangeState(GameState gameState)
         {
             currentGameState = gameState;
             if (gameState == GameState.MainMenu)
             {
                 stateStack.Clear();
             }
-                
             stateStack.Push(currentGameState);
         }
-
     }
-
 }

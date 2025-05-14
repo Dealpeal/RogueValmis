@@ -10,16 +10,12 @@ namespace Rogue
     {
         public static void Main()
         {
-
-            
-
             Console.Clear();
             while (true)
             {
                 Game rogue = new Game();
                 rogue.Run();
             }
-
         }
     }
 }

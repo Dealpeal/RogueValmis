@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Rogue
 {
-    class MapLayer
+    public class MapLayer
     {
         public string name;
         public int[] mapTiles;

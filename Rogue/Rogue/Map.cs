@@ -12,29 +12,41 @@ using TurboMapReader;
 
 namespace Rogue
 {
-    internal class Map
+   public class Map
     {
         public int mapWidth;
         public MapLayer[] layers;
 
-
         List<Enemy>? enemies;
         List<Item>? items;
-
+        public Game game;
 
         public struct Enemy
         {
             public string name;
             public Point2D position;
             public Texture EnemySprite;
-            public Enemy(string pname, Point2D pposition, Texture Sprite)
+            public int HP;
+            public int MaxHP;
+            public int AtlasIndex;
+
+            public Enemy(string pname, Point2D pposition, Texture sprite, int hp, int atlasIndex)
             {
                 this.name = pname;
                 this.position = pposition;
-                this.EnemySprite = Sprite;
+                this.EnemySprite = sprite;
+                this.HP = hp;
+                this.MaxHP = hp;
+                this.AtlasIndex = atlasIndex;
             }
 
+            public int Attack()
+            {
+                Random rand = new Random();
+                return rand.Next(3, 9);
+            }
         }
+
         public struct Item
         {
             public string name;
@@ -44,7 +56,6 @@ namespace Rogue
                 this.name = pname;
                 this.position = pposition;
             }
-
         }
 
         public Rectangle SetIndex(int imagesPerRow, int index)
@@ -58,10 +69,8 @@ namespace Rogue
             return imageRect;
         }
 
-
         public void DrawMap()
         {
-
             MapLayer groundLayer = layers[0];
 
             int[] groundTiles = groundLayer.mapTiles;
@@ -79,27 +88,27 @@ namespace Rogue
             }
             LoadEnemiesAndItems();
         }
+
         public void DrawEnemy(Texture Sprite, Point2D position)
         {
             int imagesPerRow = 12;
             float tileSize = 16;
-            
+
             int atlasIndex = 0 + 10 * imagesPerRow;
 
-            int imageX = atlasIndex % imagesPerRow; 
+            int imageX = atlasIndex % imagesPerRow;
             int imageY = (int)(atlasIndex / imagesPerRow);
             float imagePixelX = imageX * tileSize;
             float imagePixelY = imageY * tileSize;
 
-
             Rectangle imageRect = new Rectangle(imagePixelX, imagePixelY, Game.tileSize, Game.tileSize);
 
-            // Laske paikka ruudulla
             int pixelPositionX = position.x * Game.tileSize;
             int pixelPositionY = position.y * Game.tileSize;
             Vector2 pixelPosition = new Vector2(pixelPositionX, pixelPositionY);
             Raylib.DrawTextureRec(Sprite, imageRect, pixelPosition, Raylib.WHITE);
         }
+
         public void DrawItem(Texture Sprite, Point2D position)
         {
             int imagesPerRow = 12;
@@ -112,22 +121,17 @@ namespace Rogue
             float imagePixelX = imageX * tileSize;
             float imagePixelY = imageY * tileSize;
 
-
             Rectangle imageRect = new Rectangle(imagePixelX, imagePixelY, Game.tileSize, Game.tileSize);
 
-            // Laske paikka ruudulla
             int pixelPositionX = position.x * Game.tileSize;
             int pixelPositionY = position.y * Game.tileSize;
             Vector2 pixelPosition = new Vector2(pixelPositionX, pixelPositionY);
             Raylib.DrawTextureRec(Sprite, imageRect, pixelPosition, Raylib.WHITE);
-
         }
-
 
         public void LoadEnemiesAndItems()
         {
             enemies = new List<Enemy>();
-
 
             MapLayer enemyLayer = layers[2];
             int[] enemyTiles = enemyLayer.mapTiles;
@@ -144,24 +148,21 @@ namespace Rogue
                     switch (EnemytileId)
                     {
                         case 0:
-                            // ei mitään tässä kohtaa
                             break;
                         case 121:
-                            enemies.Add(new Enemy("Bat", position, enemy_image));
+                            enemies.Add(new Enemy("Bat", position, enemy_image, 20, 120));
                             break;
                         case 109:
-                            enemies.Add(new Enemy("Ghost", position, enemy_image));
+                            enemies.Add(new Enemy("Ghost", position, enemy_image, 30, 108));
                             break;
                     }
                     if (EnemytileId != 0)
                     {
-
                         Rectangle Enemyrect = SetIndex(12, EnemytileId - 1);
                         Raylib.DrawTextureRec(enemy_image, Enemyrect, Enemypos, Raylib.WHITE);
                     }
                 }
             }
-
 
             items = new List<Item>();
 
@@ -179,9 +180,7 @@ namespace Rogue
                     int ItemtileId = itemTiles[index];
                     switch (ItemtileId)
                     {
-
                         case 0:
-                            // ei mitään tässä kohtaa
                             break;
                         case 1:
                             items.Add(new Item("Sword", position, item_image));
@@ -204,13 +203,9 @@ namespace Rogue
                         case 62:
                             items.Add(new Item("ItemBox", position, item_image));
                             break;
-
-
-
                     }
                     if (ItemtileId != 0)
                     {
-
                         Rectangle Enemyrect = SetIndex(12, ItemtileId - 1);
                         Raylib.DrawTextureRec(enemy_image, Enemyrect, Itempos, Raylib.WHITE);
                     }
@@ -218,24 +213,25 @@ namespace Rogue
             }
         }
 
-
         public Enemy? GetEnemyAt(Point2D position)
         {
             foreach (var Enemy in enemies)
             {
-  
                 Vector2 Playerv2 = new Vector2(position.x, position.y);
                 Vector2 Enemyv2 = new Vector2(Enemy.position.x, Enemy.position.y);
                 if (Playerv2 == Enemyv2)
                 {
                     Console.WriteLine("Enemy Found");
                     Raylib.PlaySound(Game.EnemySound);
+                    game.ChangeState(Game.GameState.BattleScreen);
+                    game.myBattleScreen.StartBattle(Enemy);
                     return Enemy;
                 }
             }
             return null;
         }
-        public Item? GetItemAt(Point2D position) 
+
+        public Item? GetItemAt(Point2D position)
         {
             foreach (var Item in items)
             {
@@ -251,5 +247,11 @@ namespace Rogue
             return null;
         }
 
+        public void RemoveEnemy(Enemy enemy)
+        {
+            enemies.Remove(enemy);
+            int index = enemy.position.x + enemy.position.y * mapWidth;
+            layers[2].mapTiles[index] = 0;
+        }
     }
 }
